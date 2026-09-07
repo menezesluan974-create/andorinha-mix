@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Andorinha Mix - Sistema</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#20252b}
+header{background:#1261a0;color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:21px}.container{max-width:1100px;margin:auto;padding:18px}
+nav{display:flex;gap:8px;overflow:auto;margin-bottom:18px}nav button{border:0;background:white;padding:11px 14px;border-radius:9px;cursor:pointer;font-weight:bold;white-space:nowrap}
+nav button.active{background:#1261a0;color:white}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:white;border-radius:12px;padding:16px;box-shadow:0 2px 8px #00000010}.metric{font-size:24px;font-weight:bold;margin-top:7px}
+section{display:none}.visible{display:block}.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+input,select{padding:11px;border:1px solid #d7dce1;border-radius:8px;font-size:15px;width:100%}
+.field{flex:1;min-width:160px}button.primary{background:#1261a0;color:white;border:0;border-radius:8px;padding:11px 15px;font-weight:bold;cursor:pointer}
+button.danger{background:#d83b3b;color:#fff;border:0;border-radius:7px;padding:7px 10px;cursor:pointer}
+table{width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden}th,td{text-align:left;padding:11px;border-bottom:1px solid #eee;font-size:14px}
+.badge{padding:4px 8px;border-radius:20px;background:#fff0c2}.empty{padding:25px;text-align:center;color:#777}
+.total{font-size:18px;font-weight:bold;text-align:right;margin:12px 0}
+@media(max-width:750px){.grid{grid-template-columns:repeat(2,1fr)}header h1{font-size:18px}.container{padding:12px}th,td{padding:8px;font-size:13px}}
+</style>
+</head>
+<body>
+<header><h1>🏪 Andorinha Mix</h1><span id="clock"></span></header>
+<div class="container">
+<nav>
+<button class="active" onclick="show('inicio',this)">Início</button>
+<button onclick="show('vendas',this)">Nova venda</button>
+<button onclick="show('produtos',this)">Produtos</button>
+<button onclick="show('clientes',this)">Clientes / Fiado</button>
+<button onclick="show('caixa',this)">Caixa</button>
+</nav>
+
+<section id="inicio" class="visible">
+<div class="grid">
+<div class="card">💰 Vendas hoje<div class="metric" id="mVendas">R$ 0,00</div></div>
+<div class="card">📦 Produtos<div class="metric" id="mProdutos">0</div></div>
+<div class="card">📝 Fiado aberto<div class="metric" id="mFiado">R$ 0,00</div></div>
+<div class="card">💵 Caixa<div class="metric" id="mCaixa">R$ 0,00</div></div>
+</div>
+<div class="card" style="margin-top:14px"><b>Primeiros passos</b><p>Cadastre seus produtos e clientes. Depois faça uma venda escolhendo a forma de pagamento. Se escolher <b>Fiado</b>, a dívida será lançada automaticamente no cliente.</p></div>
+</section>
+
+<section id="produtos">
+<div class="card"><h2>📦 Produtos</h2>
+<div class="row"><div class="field"><input id="pNome" placeholder="Nome do produto"></div><div class="field"><input id="pPreco" type="number" step=".01" placeholder="Preço de venda"></div><div class="field"><input id="pEstoque" type="number" step="1" placeholder="Estoque"></div><button class="primary" onclick="addProduto()">Adicionar</button></div>
+<input id="buscaProduto" oninput="renderProdutos()" placeholder="🔎 Buscar produto">
+<div id="listaProdutos"></div></div>
+</section>
+
+<section id="clientes">
+<div class="card"><h2>👥 Clientes / Fiado</h2>
+<div class="row"><div class="field"><input id="cNome" placeholder="Nome do cliente"></div><div class="field"><input id="cTel" placeholder="Telefone"></div><div class="field"><input id="cLimite" type="number" step=".01" placeholder="Limite de fiado"></div><button class="primary" onclick="addCliente()">Adicionar</button></div>
+<div id="listaClientes"></div></div>
+</section>
+
+<section id="vendas">
+<div class="card"><h2>🛒 Nova venda</h2>
+<div class="row"><div class="field"><select id="vProduto"></select></div><div style="width:120px"><input id="vQtd" type="number" min="1" value="1"></div><button class="primary" onclick="addItem()">Adicionar</button></div>
+<div id="carrinho"></div>
+<div class="row"><div class="field"><select id="vPagamento"><option>Dinheiro</option><option>Pix</option><option>Cartão</option><option>Fiado</option></select></div><div class="field"><select id="vCliente"><option value="">Selecione o cliente (somente fiado)</option></select></div><button class="primary" onclick="finalizarVenda()">Finalizar venda</button></div>
+<div class="total">Total: <span id="vTotal">R$ 0,00</span></div>
+</div>
+</section>
+
+<section id="caixa">
+<div class="card"><h2>💵 Caixa</h2><div id="resumoCaixa"></div><h3>Últimas vendas</h3><div id="historico"></div></div>
+</section>
+</div>
+
+<script>
+const key='andorinha_mix_v1';
+let db=JSON.parse(localStorage.getItem(key)||'{"produtos":[],"clientes":[],"vendas":[]}');
+let cart=[];
+const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+function save(){localStorage.setItem(key,JSON.stringify(db));refresh()}
+function show(id,btn){document.querySelectorAll('section').forEach(x=>x.classList.remove('visible'));document.getElementById(id).classList.add('visible');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');refresh()}
+function addProduto(){let nome=pNome.value.trim(),preco=+pPreco.value,estoque=+pEstoque.value;if(!nome||preco<=0)return alert('Informe nome e preço.');db.produtos.push({id:Date.now(),nome,preco,estoque});pNome.value=pPreco.value=pEstoque.value='';save()}
+function delProduto(id){if(confirm('Excluir produto?')){db.produtos=db.produtos.filter(p=>p.id!==id);save()}}
+function addCliente(){let nome=cNome.value.trim(),tel=cTel.value,limite=+cLimite.value||0;if(!nome)return alert('Informe o nome.');db.clientes.push({id:Date.now(),nome,tel,limite,divida:0});cNome.value=cTel.value=cLimite.value='';save()}
+function pagar(id){let c=db.clientes.find(x=>x.id===id);let v=+prompt('Quanto o cliente vai pagar?',c.divida);if(v>0){v=Math.min(v,c.divida);c.divida-=v;db.vendas.push({id:Date.now(),data:new Date().toISOString(),total:-v,pagamento:'Pagamento de fiado',cliente:c.nome});save()}}
+function addItem(){let id=+vProduto.value,q=+vQtd.value||1,p=db.produtos.find(x=>x.id===id);if(!p||q<1)return;if(p.estoque<q)return alert('Estoque insuficiente.');let it=cart.find(x=>x.id===id);if(it)it.qtd+=q;else cart.push({id:p.id,nome:p.nome,preco:p.preco,qtd:q});renderCart()}
+function removeItem(id){cart=cart.filter(x=>x.id!==id);renderCart()}
+function finalizarVenda(){if(!cart.length)return alert('Carrinho vazio.');let pag=vPagamento.value,cli=db.clientes.find(x=>x.id===+vCliente.value),total=cart.reduce((s,x)=>s+x.preco*x.qtd,0);if(pag==='Fiado'){if(!cli)return alert('Selecione o cliente do fiado.');if(cli.limite>0&&cli.divida+total>cli.limite)return alert('Essa venda ultrapassa o limite de fiado do cliente.');cli.divida+=total}
+cart.forEach(x=>{let p=db.produtos.find(p=>p.id===x.id);p.estoque-=x.qtd});db.vendas.push({id:Date.now(),data:new Date().toISOString(),total,pagamento:pag,cliente:cli?cli.nome:''});cart=[];alert('Venda registrada!');save()}
+function renderCart(){if(!cart.length){carrinho.innerHTML='<div class="empty">Nenhum item na venda.</div>';vTotal.textContent=money(0);return}let t=cart.reduce((s,x)=>s+x.preco*x.qtd,0);carrinho.innerHTML='<table><tr><th>Produto</th><th>Qtd</th><th>Subtotal</th><th></th></tr>'+cart.map(x=>`<tr><td>${x.nome}</td><td>${x.qtd}</td><td>${money(x.preco*x.qtd)}</td><td><button class="danger" onclick="removeItem(${x.id})">X</button></td></tr>`).join('')+'</table>';vTotal.textContent=money(t)}
+function renderProdutos(){let q=(buscaProduto.value||'').toLowerCase();let a=db.produtos.filter(p=>p.nome.toLowerCase().includes(q));listaProdutos.innerHTML=a.length?'<table><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th></th></tr>'+a.map(p=>`<tr><td>${p.nome}</td><td>${money(p.preco)}</td><td><span class="badge">${p.estoque}</span></td><td><button class="danger" onclick="delProduto(${p.id})">Excluir</button></td></tr>`).join('')+'</table>':'<div class="empty">Nenhum produto cadastrado.</div>'}
+function renderClientes(){listaClientes.innerHTML=db.clientes.length?'<table><tr><th>Cliente</th><th>Telefone</th><th>Limite</th><th>Deve</th><th></th></tr>'+db.clientes.map(c=>`<tr><td>${c.nome}</td><td>${c.tel||'-'}</td><td>${c.limite?money(c.limite):'Sem limite'}</td><td><b>${money(c.divida)}</b></td><td>${c.divida>0?`<button class="primary" onclick="pagar(${c.id})">Receber</button>`:''}</td></tr>`).join('')+'</table>':'<div class="empty">Nenhum cliente cadastrado.</div>'}
+function renderSelects(){vProduto.innerHTML=db.produtos.map(p=>`<option value="${p.id}">${p.nome} — ${money(p.preco)} (estoque ${p.estoque})</option>`).join('');vCliente.innerHTML='<option value="">Selecione o cliente (somente fiado)</option>'+db.clientes.map(c=>`<option value="${c.id}">${c.nome} — deve ${money(c.divida)}</option>`).join('')}
+function renderCaixa(){let hoje=new Date().toDateString(),v=db.vendas.filter(x=>new Date(x.data).toDateString()===hoje);let total=v.reduce((s,x)=>s+x.total,0);let por={Dinheiro:0,Pix:0,Cartão:0,Fiado:0};v.forEach(x=>{if(por[x.pagamento]!=null&&x.total>0)por[x.pagamento]+=x.total});resumoCaixa.innerHTML=`<div class="grid"><div class="card">Vendas: <b>${money(v.filter(x=>x.total>0).reduce((s,x)=>s+x.total,0))}</b></div><div class="card">Recebimentos: <b>${money(v.filter(x=>x.total<0).reduce((s,x)=>s-x.total,0))}</b></div><div class="card">Fiado lançado: <b>${money(por.Fiado)}</b></div><div class="card">Vendas pagas: <b>${money(por.Dinheiro+por.Pix+por['Cartão'])}</b></div></div>`;historico.innerHTML=v.length?'<table><tr><th>Hora</th><th>Valor</th><th>Pagamento</th><th>Cliente</th></tr>'+v.slice(-20).reverse().map(x=>`<tr><td>${new Date(x.data).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td><td>${money(Math.abs(x.total))}</td><td>${x.pagamento}</td><td>${x.cliente||'-'}</td></tr>`).join('')+'</table>':'<div class="empty">Nenhuma movimentação hoje.</div>'}
+function refresh(){mProdutos.textContent=db.produtos.length;let hoje=new Date().toDateString();let vendasHoje=db.vendas.filter(x=>new Date(x.data).toDateString()===hoje);mVendas.textContent=money(vendasHoje.filter(x=>x.total>0).reduce((s,x)=>s+x.total,0));mFiado.textContent=money(db.clientes.reduce((s,c)=>s+c.divida,0));mCaixa.textContent=money(vendasHoje.reduce((s,x)=>s+x.total,0));renderProdutos();renderClientes();renderSelects();renderCart();renderCaixa()}
+setInterval(()=>clock.textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),1000);refresh();
+</script>
+</body>
+</html>
